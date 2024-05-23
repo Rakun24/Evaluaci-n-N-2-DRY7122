@@ -1,0 +1,90 @@
+import requests
+API_KEY = '5e899024-b6b4-4d05-85b0-b813cbdfe51c'
+GEOCODE_URL = 'https://graphhopper.com/api/1/geocode'
+ROUTE_URL = 'https://graphhopper.com/api/1/route'
+
+def get_coordinates(city):
+    params = {
+        'q': city,
+        'locale': 'en',
+        'limit': 1,
+        'key': API_KEY
+    }
+    response = requests.get(GEOCODE_URL, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data['hits']:
+            lat = data['hits'][0]['point']['lat']
+            lng = data['hits'][0]['point']['lng']
+            return (lat, lng)
+        else:
+            print(f'No se encontraron coordenadas para la ciudad: {city}')
+            return None
+    else:
+        print(f'Error: {response.status_code} - {response.reason}')
+        print(response.json())
+        return None
+
+def get_distance_duration_and_instructions(start_coords, end_coords):
+    params = {
+        'point': [f'{start_coords[0]},{start_coords[1]}', f'{end_coords[0]},{end_coords[1]}'],
+        'vehicle': 'car',
+        'locale': 'en',
+        'calc_points': 'true',
+        'instructions': 'true',
+        'key': API_KEY
+    }
+    response = requests.get(ROUTE_URL, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        distance = data['paths'][0]['distance'] / 1000
+        time_in_seconds = data['paths'][0]['time'] / 1000
+        hours, remainder = divmod(time_in_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        instructions = data['paths'][0]['instructions']
+        return distance, hours, minutes, seconds, instructions
+    else:
+        print(f'Error: {response.status_code} - {response.reason}')
+        print(response.json())
+        return None, None, None, None, None
+
+def calculate_fuel(distance, consumption_rate):
+    return distance * (consumption_rate / 100)
+
+def print_instructions(instructions):
+    for i, instruction in enumerate(instructions):
+        distance = instruction['distance'] / 1000
+        time = instruction['time'] / 1000
+        hours, remainder = divmod(time, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"Paso {i + 1}: {instruction['text']}")
+        print(f"  Distancia: {distance:.2f} km")
+        print(f"  Tiempo: {int(hours):02} horas, {int(minutes):02} minutos, {int(seconds):02} segundos")
+
+if __name__ == "__main__":
+    while True:
+        ciudad_origen = input("Ingrese la Ciudad de Origen (o 'q' para salir): ")
+        if ciudad_origen.lower() == 'q':
+            break
+        ciudad_destino = input("Ingrese la Ciudad de Destino (o 'q' para salir): ")
+        if ciudad_destino.lower() == 'q':
+            break
+
+        origen_coords = get_coordinates(ciudad_origen)
+        destino_coords = get_coordinates(ciudad_destino)
+
+        if origen_coords and destino_coords:
+            distance, hours, minutes, seconds, instructions = get_distance_duration_and_instructions(origen_coords, destino_coords)
+            if distance is not None:
+                consumption_rate = 8
+                fuel_required = calculate_fuel(distance, consumption_rate)
+                print(f'\nLa distancia entre {ciudad_origen} y {ciudad_destino} es {distance:.2f} kilómetros.')
+                print(f'La duración del viaje es {int(hours):02} horas, {int(minutes):02} minutos y {int(seconds):02} segundos.')
+                print(f'El combustible requerido para el viaje es {fuel_required:.2f} litros.\n')
+                print('Narrativa del viaje:')
+                print_instructions(instructions)
+            else:
+                print('No se pudo calcular la distancia y duración.')
+        else:
+            print('No se pudieron obtener las coordenadas de una o ambas ciudades.')
+print(f'\n\tConsumo de API Pública')
